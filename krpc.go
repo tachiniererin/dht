@@ -12,6 +12,7 @@ import (
 
 	bencode "github.com/jackpal/bencode-go"
 	"github.com/nictuku/nettools"
+	"github.com/tachiniererin/netwrap"
 )
 
 // Search a node again after some time.
@@ -165,7 +166,7 @@ type responseType struct {
 }
 
 // sendMsg bencodes the data in 'query' and sends it to the remote node.
-func sendMsg(conn *net.UDPConn, raddr net.UDPAddr, query interface{}, log DebugLogger) {
+func sendMsg(conn netwrap.UDPConn, raddr net.UDPAddr, query interface{}, log DebugLogger) {
 	totalSent.Add(1)
 	var b bytes.Buffer
 	if err := bencode.Marshal(&b, query); err != nil {
@@ -176,7 +177,6 @@ func sendMsg(conn *net.UDPConn, raddr net.UDPAddr, query interface{}, log DebugL
 	} else {
 		totalWrittenBytes.Add(int64(n))
 	}
-	return
 }
 
 // Read responses from bencode-speaking nodes. Return the appropriate data structure.
@@ -194,7 +194,6 @@ func readResponse(p packetType, log DebugLogger) (response responseType, err err
 		log.Debugf("DHT: unmarshal error, odd or partial data during UDP read? %v, err=%s", string(p.b), e2)
 		return response, e2
 	}
-	return
 }
 
 // Message to be sent out in the wire. Must not have any extra fields.
@@ -229,7 +228,7 @@ func listen(addr string, listenPort int, proto string, log DebugLogger) (socket 
 }
 
 // Read from UDP socket, writes slice of byte into channel.
-func readFromSocket(socket *net.UDPConn, conChan chan packetType, bytesArena arena, stop chan bool, log DebugLogger) {
+func readFromSocket(socket netwrap.UDPConn, conChan chan packetType, bytesArena arena, stop chan bool, log DebugLogger) {
 	for {
 		b := bytesArena.Pop()
 		n, addr, err := socket.ReadFromUDP(b)
