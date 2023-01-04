@@ -147,7 +147,7 @@ type DHT struct {
 	config                 Config
 	routingTable           *routingTable
 	peerStore              *peerStore
-	conn                   *net.UDPConn
+	Conn                   *net.UDPConn
 	exploredNeighborhood   bool
 	remoteNodeAcquaintance chan string
 	peersRequest           chan ihReq
@@ -359,14 +359,17 @@ func (d *DHT) Run() error {
 // initSocket initializes the udp socket
 // listening to incoming dht requests
 func (d *DHT) initSocket() (err error) {
-	d.conn, err = listen(d.config.Address, d.config.Port, d.config.UDPProto, d.DebugLogger)
-	if err != nil {
-		return err
+	// only init the socket if it wasn't already provided
+	if d.Conn == nil {
+		d.Conn, err = listen(d.config.Address, d.config.Port, d.config.UDPProto, d.DebugLogger)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Update the stored port number in case it was set 0, meaning it was
 	// set automatically by the system
-	d.config.Port = d.conn.LocalAddr().(*net.UDPAddr).Port
+	d.config.Port = d.Conn.LocalAddr().(*net.UDPAddr).Port
 	return nil
 }
 
@@ -391,7 +394,7 @@ func (d *DHT) bootstrap() {
 // is called from another go routine.
 func (d *DHT) loop() {
 	// Close socket
-	defer d.conn.Close()
+	defer d.Conn.Close()
 
 	// There is goroutine pushing and one popping items out of the arena.
 	// One passes work to the other. So there is little contention in the
@@ -403,7 +406,7 @@ func (d *DHT) loop() {
 	d.wg.Add(1)
 	go func() {
 		defer d.wg.Done()
-		readFromSocket(d.conn, socketChan, bytesArena, d.stop, d.DebugLogger)
+		readFromSocket(d.Conn, socketChan, bytesArena, d.stop, d.DebugLogger)
 	}()
 
 	d.bootstrap()
@@ -705,7 +708,7 @@ func (d *DHT) pingNode(r *remoteNode) {
 
 	queryArguments := map[string]interface{}{"id": d.nodeId}
 	query := queryMessage{t, "q", "ping", queryArguments}
-	sendMsg(d.conn, r.address, query, d.DebugLogger)
+	sendMsg(d.Conn, r.address, query, d.DebugLogger)
 	totalSentPing.Add(1)
 }
 
@@ -728,7 +731,7 @@ func (d *DHT) getPeersFrom(r *remoteNode, ih InfoHash) {
 	query := queryMessage{transId, "q", ty, queryArguments}
 	d.DebugLogger.Debugf("DHT sending get_peers. nodeID: %x@%v, InfoHash: %x , distance: %x", r.id, r.address, ih, hashDistance(InfoHash(r.id), ih))
 	r.lastSearchTime = time.Now()
-	sendMsg(d.conn, r.address, query, d.DebugLogger)
+	sendMsg(d.Conn, r.address, query, d.DebugLogger)
 }
 
 func (d *DHT) findNodeFrom(r *remoteNode, id string) {
@@ -752,7 +755,7 @@ func (d *DHT) findNodeFrom(r *remoteNode, id string) {
 	query := queryMessage{transId, "q", ty, queryArguments}
 	d.DebugLogger.Debugf("DHT sending find_node. nodeID: %x@%v, target ID: %x , distance: %x", r.id, r.address, id, hashDistance(InfoHash(r.id), ih))
 	r.lastSearchTime = time.Now()
-	sendMsg(d.conn, r.address, query, d.DebugLogger)
+	sendMsg(d.Conn, r.address, query, d.DebugLogger)
 }
 
 // announcePeer sends a message to the destination address to advertise that
@@ -774,7 +777,7 @@ func (d *DHT) announcePeer(address net.UDPAddr, ih InfoHash, port int, token str
 		"token":     token,
 	}
 	query := queryMessage{transId, "q", ty, queryArguments}
-	sendMsg(d.conn, address, query, d.DebugLogger)
+	sendMsg(d.Conn, address, query, d.DebugLogger)
 }
 
 func (d *DHT) hostToken(addr net.UDPAddr, secret string) string {
@@ -821,7 +824,7 @@ func (d *DHT) replyAnnouncePeer(addr net.UDPAddr, node *remoteNode, r responseTy
 		Y: "r",
 		R: map[string]interface{}{"id": d.nodeId},
 	}
-	sendMsg(d.conn, addr, reply, d.DebugLogger)
+	sendMsg(d.Conn, addr, reply, d.DebugLogger)
 }
 
 func (d *DHT) replyGetPeers(addr net.UDPAddr, r responseType) {
@@ -846,7 +849,7 @@ func (d *DHT) replyGetPeers(addr net.UDPAddr, r responseType) {
 	} else {
 		reply.R["nodes"] = d.nodesForInfoHash(ih)
 	}
-	sendMsg(d.conn, addr, reply, d.DebugLogger)
+	sendMsg(d.Conn, addr, reply, d.DebugLogger)
 }
 
 func (d *DHT) nodesForInfoHash(ih InfoHash) string {
@@ -901,7 +904,7 @@ func (d *DHT) replyFindNode(addr net.UDPAddr, r responseType) {
 	}
 	d.DebugLogger.Debugf("replyFindNode: Nodes only. Giving %d", len(n))
 	reply.R["nodes"] = strings.Join(n, "")
-	sendMsg(d.conn, addr, reply, d.DebugLogger)
+	sendMsg(d.Conn, addr, reply, d.DebugLogger)
 }
 
 func (d *DHT) replyPing(addr net.UDPAddr, response responseType) {
@@ -911,7 +914,7 @@ func (d *DHT) replyPing(addr net.UDPAddr, response responseType) {
 		Y: "r",
 		R: map[string]interface{}{"id": d.nodeId},
 	}
-	sendMsg(d.conn, addr, reply, d.DebugLogger)
+	sendMsg(d.Conn, addr, reply, d.DebugLogger)
 }
 
 // Process another node's response to a get_peers query. If the response
