@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/nictuku/nettools"
-	"github.com/tachiniererin/netwrap"
 )
 
 // Config for the DHT Node. Use NewConfig to create a configuration with default values.
@@ -148,7 +147,7 @@ type DHT struct {
 	config                 Config
 	routingTable           *routingTable
 	peerStore              *peerStore
-	Conn                   netwrap.UDPConn
+	Conn                   net.PacketConn
 	exploredNeighborhood   bool
 	remoteNodeAcquaintance chan string
 	peersRequest           chan ihReq

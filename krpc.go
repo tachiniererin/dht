@@ -7,12 +7,12 @@ import (
 	"expvar"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"time"
 
 	bencode "github.com/jackpal/bencode-go"
 	"github.com/nictuku/nettools"
-	"github.com/tachiniererin/netwrap"
 )
 
 // Search a node again after some time.
@@ -166,13 +166,13 @@ type responseType struct {
 }
 
 // sendMsg bencodes the data in 'query' and sends it to the remote node.
-func sendMsg(conn netwrap.UDPConn, raddr net.UDPAddr, query interface{}, log DebugLogger) {
+func sendMsg(conn net.PacketConn, raddr net.UDPAddr, query interface{}, log DebugLogger) {
 	totalSent.Add(1)
 	var b bytes.Buffer
 	if err := bencode.Marshal(&b, query); err != nil {
 		return
 	}
-	if n, err := conn.WriteToUDP(b.Bytes(), &raddr); err != nil {
+	if n, err := conn.WriteTo(b.Bytes(), &raddr); err != nil {
 		log.Debugf("DHT: node write failed to %+v, error=%s", raddr, err)
 	} else {
 		totalWrittenBytes.Add(int64(n))
@@ -228,10 +228,10 @@ func listen(addr string, listenPort int, proto string, log DebugLogger) (socket 
 }
 
 // Read from UDP socket, writes slice of byte into channel.
-func readFromSocket(socket netwrap.UDPConn, conChan chan packetType, bytesArena arena, stop chan bool, log DebugLogger) {
+func readFromSocket(socket net.PacketConn, conChan chan packetType, bytesArena arena, stop chan bool, log DebugLogger) {
 	for {
 		b := bytesArena.Pop()
-		n, addr, err := socket.ReadFromUDP(b)
+		n, addr, err := socket.ReadFrom(b)
 		if err != nil {
 			log.Debugf("DHT: readResponse error:%s\n", err)
 		}
@@ -241,7 +241,7 @@ func readFromSocket(socket netwrap.UDPConn, conChan chan packetType, bytesArena 
 		}
 		totalReadBytes.Add(int64(n))
 		if n > 0 && err == nil {
-			p := packetType{b, *addr}
+			p := packetType{b, *net.UDPAddrFromAddrPort(netip.MustParseAddrPort(addr.String()))}
 			select {
 			case conChan <- p:
 				continue
